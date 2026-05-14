@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -15,6 +17,10 @@ class MeditationScriptRequest(BaseModel):
             "I have an important technical interview tomorrow and I feel overwhelmed and can't sleep."
         ],
     )
+    locale: Optional[Literal["en", "ko"]] = Field(
+        None,
+        description='Script language: "en" or "ko". Omit to use server APP_LOCALE.',
+    )
 
 
 class MeditationScriptResponse(BaseModel):
@@ -24,6 +30,10 @@ class MeditationScriptResponse(BaseModel):
     provider: str
     model: str
     script: str
+    locale: Literal["en", "ko"] = Field(
+        ...,
+        description='Effective locale used for this script (request `locale` or APP_LOCALE).',
+    )
 
 
 class MeditationSpeechRequest(BaseModel):
@@ -34,6 +44,26 @@ class MeditationSpeechRequest(BaseModel):
         min_length=1,
         max_length=50000,
         description="Full meditation script text (e.g. output from POST /meditation/script).",
+    )
+
+
+class MeditationSpeechStreamRequest(BaseModel):
+    """Full script; server splits into sentences and streams one MP3 chunk per line (NDJSON)."""
+
+    script: str = Field(
+        ...,
+        min_length=1,
+        max_length=50000,
+        description="Meditation script text to synthesize in sentence-sized streaming chunks.",
+    )
+    voice_preset: Optional[str] = Field(
+        None,
+        description="Optional: bella_style | marcus_style | calm_female_conversational | default | env.",
+        examples=["bella_style"],
+    )
+    voice_id: Optional[str] = Field(
+        None,
+        description="Optional: override preset and ELEVENLABS_VOICE_ID with a raw ElevenLabs voice_id.",
     )
 
 

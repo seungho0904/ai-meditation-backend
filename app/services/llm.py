@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, cast
 
 import httpx
 
@@ -15,6 +15,13 @@ from app.schemas.meditation import MeditationScriptRequest, MeditationScriptResp
 logger = logging.getLogger(__name__)
 
 LLMProvider = Literal["openai", "anthropic"]
+AppLocale = Literal["en", "ko"]
+
+
+def _resolve_locale(body: MeditationScriptRequest, cfg: Settings) -> AppLocale:
+    if body.locale == "en" or body.locale == "ko":
+        return cast(AppLocale, body.locale)
+    return cast(AppLocale, cfg.APP_LOCALE)
 
 
 def _require_key(provider: LLMProvider, cfg: Settings) -> str:
@@ -47,13 +54,14 @@ async def _call_openai(
     client: httpx.AsyncClient,
     cfg: Settings,
     user_message: str,
+    locale: AppLocale,
 ) -> str:
     api_key = _require_key("openai", cfg)
     payload: dict[str, Any] = {
         "model": cfg.OPENAI_MODEL,
         "temperature": 0.7,
         "messages": [
-            {"role": "system", "content": system_prompt()},
+            {"role": "system", "content": system_prompt(locale)},
             {"role": "user", "content": user_message},
         ],
     }
@@ -75,13 +83,14 @@ async def _call_anthropic(
     client: httpx.AsyncClient,
     cfg: Settings,
     user_message: str,
+    locale: AppLocale,
 ) -> str:
     api_key = _require_key("anthropic", cfg)
     payload: dict[str, Any] = {
         "model": cfg.ANTHROPIC_MODEL,
         "max_tokens": 4096,
         "temperature": 0.7,
-        "system": system_prompt(),
+        "system": system_prompt(locale),
         "messages": [{"role": "user", "content": user_message}],
     }
     headers = {
@@ -112,14 +121,15 @@ async def generate_meditation_script(
     """
     cfg = cfg or settings
     provider = _normalize_provider(cfg.LLM_PROVIDER)
-    user_message = format_user_message(body.context)
+    locale = _resolve_locale(body, cfg)
+    user_message = format_user_message(body.context, locale)
 
     try:
         if provider == "openai":
-            script = await _call_openai(client, cfg, user_message)
+            script = await _call_openai(client, cfg, user_message, locale)
             model = cfg.OPENAI_MODEL
         else:
-            script = await _call_anthropic(client, cfg, user_message)
+            script = await _call_anthropic(client, cfg, user_message, locale)
             model = cfg.ANTHROPIC_MODEL
     except httpx.TimeoutException as e:
         logger.warning("LLM request timed out: %s", e)
@@ -150,4 +160,5 @@ async def generate_meditation_script(
         provider=provider,
         model=model,
         script=script,
+        locale=locale,
     )

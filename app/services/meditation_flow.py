@@ -35,6 +35,7 @@ async def generate_script_and_audio(
         provider=script_resp.provider,
         model=script_resp.model,
         script=script_resp.script,
+        locale=script_resp.locale,
         audio_format="mp3",
         audio_base64=b64,
         audio_truncated=audio_truncated,

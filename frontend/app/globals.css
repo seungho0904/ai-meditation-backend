@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  zenit — soft dawn mist: light base, sage + cool air (no void-like sphere).
+*/
+
+:root {
+  --zen-base: #e8ecf4;
+  --zen-base-deep: #dde3ee;
+  --zen-sage: #7d9478;
+  --zen-sage-soft: #b5c9ae;
+  --zen-air: #a8b8d4;
+  --zen-ink: #334155;
+  --zen-ink-muted: #64748b;
+  --zen-mist: rgba(255, 255, 255, 0.65);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply min-h-screen antialiased font-normal tracking-wide leading-relaxed;
+  background-color: var(--zen-base);
+  color: var(--zen-ink);
+}
+
+/* Very light grain — keeps texture without gloom */
+.zen-noise {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.022;
+  mix-blend-mode: multiply;
+}
+
+.zen-noise svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes zen-view-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.zen-view-in {
+  animation: zen-view-in 1s ease-out forwards;
+}
+
+@keyframes aurora-rotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.68;
+  }
+  100% {
+    transform: rotate(360deg) scale(1.02);
+    opacity: 0.55;
+  }
+}
+
+@keyframes aurora-shimmer {
+  0%,
+  100% {
+    filter: blur(40px) hue-rotate(0deg);
+    opacity: 0.5;
+  }
+  50% {
+    filter: blur(48px) hue-rotate(5deg);
+    opacity: 0.62;
+  }
+}
+
+@keyframes breath-cycle-slow {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+.voice-sphere-aurora {
+  animation: aurora-rotate 36s linear infinite;
+}
+
+.voice-sphere-aurora-shimmer {
+  animation: aurora-shimmer 24s ease-in-out infinite;
+}
+
+.voice-sphere-breath {
+  animation: breath-cycle-slow 8.2s ease-in-out infinite;
+}
+
+@layer components {
+  .glass-panel {
+    @apply rounded-[1.75rem] border border-white/55 bg-white/45 shadow-[0_8px_40px_rgba(51,65,85,0.08)] backdrop-blur-xl;
+  }
+  .glass-panel-subtle {
+    @apply rounded-3xl border border-white/50 bg-white/35 backdrop-blur-xl;
+  }
+}

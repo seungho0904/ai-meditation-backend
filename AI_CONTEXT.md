@@ -1,54 +1,60 @@
-# Project Name: AI-Powered Guided Meditation & Venting Web App
-**Status:** Phase 1 (MVP) — LLM + ElevenLabs TTS (`POST /api/v1/meditation/script`, `/meditation/speech`, `/meditation/session`). **Next:** Next.js UI + optional S3 presigned URLs per roadmap.
+# Project: **zenit** — AI-Powered Guided Meditation Web App
+
+**Product name:** zenit (browser title: `zenit | AI Meditation`).  
+**Status:** Phase 1 (MVP) — **shipped:** FastAPI API + Next.js UI with script generation, full-session MP3, sentence-stream TTS, bilingual UI (`en` / `ko`), and versioned LLM prompts (`meditation_v2_*`). **Deferred:** S3 presigned URLs, DynamoDB, auth (Phase 2+).
 
 ## 1. Project Objective
-- **Core Functionality:** A web application that receives a user's current emotional state and situational context to generate a real-time, personalized guided meditation script, delivered via high-quality Text-to-Speech (TTS).
-- **Future Expansion:** An interactive, two-way AI "venting" and counseling feature where users can share their struggles and receive empathetic, context-aware responses.
-- **Portfolio Goal (US Tech Market Focus):** Keep the frontend UI clean and minimal, while heavily demonstrating robust backend API design in Python. The project must showcase strong competencies in LLM prompt engineering, asynchronous handling of 3rd-party APIs, and practical AWS cloud infrastructure integration.
+
+- **Core:** Users describe how they feel; the app generates a personalized guided meditation script (LLM) and plays it via ElevenLabs TTS (full MP3 and/or streamed sentences).
+- **Brand experience:** Calm, minimal, and trustworthy — **soft dawn / mist** visual language (not harsh black voids); central orb reads as a **moon-pearl / breath** focal point, not a face-like mask.
+- **Future:** Two-way “venting” / counseling and cloud persistence per roadmap.
+- **Portfolio:** Clean Next.js UI + strong FastAPI design (async I/O, typed config, versioned prompts, OpenAPI).
 
 ## 2. Tech Stack
-- **Backend:** Python, FastAPI (focusing on asynchronous processing, high concurrency, and type hinting).
-- **Frontend:** Next.js (React), TailwindCSS (for a clean, responsive, and mobile-friendly UI).
-- **Database & Cloud (AWS):** 
-  - AWS DynamoDB (NoSQL for scalable user state and meditation log storage).
-  - AWS S3 (for audio file caching and secure storage).
-- **AI & 3rd Party APIs:** 
-  - LLM: OpenAI API (gpt-4o-mini) or Anthropic Claude API (for script generation and chatbot logic).
-  - TTS: ElevenLabs API (for high-fidelity, emotional voice synthesis).
-- **DevOps & Quality (Bonus for Portfolio):** Docker (for containerization), Pytest (for unit testing).
+
+- **Backend:** Python 3.9+, FastAPI, `httpx`, `pydantic-settings`.
+- **Frontend:** Next.js 14, React 18, Tailwind CSS, TypeScript.
+- **AI:** OpenAI Chat Completions or Anthropic Messages (`LLM_PROVIDER`); ElevenLabs TTS (streaming + presets).
+- **Cloud (later):** DynamoDB, S3 — per Phase 2 in roadmap below.
 
 ## 3. System Architecture & Workflow (Phase 1)
-1. **Client (Frontend):** The user inputs their current emotional state via a text form (e.g., "I have an important technical interview tomorrow and I'm feeling overwhelmed").
-2. **Backend (FastAPI):** 
-   - Constructs an optimized prompt and asynchronously calls the LLM API.
-   - Streams the text response from the LLM directly to the TTS API to minimize latency.
-   - Temporarily uploads the generated audio payload to AWS S3 and generates a pre-signed URL (or streams it directly to the client).
-3. **Client (Frontend):** Receives the payload and renders the audio player alongside the text script for the user.
+
+1. **Client:** User enters context (10–8000 chars), chooses voice preset, selects UI locale (`en` | `ko`). Optional: words-only script or full session (script + MP3).
+2. **API:** Builds prompts from `app/core/prompts/meditation_v2.py` (persona + `locale`-driven script language), calls LLM, then TTS as needed; returns JSON (and binary routes where applicable).
+3. **Client:** Renders script, plays audio, optional NDJSON sentence stream.
+
+*Note:* Phase 1 returns audio to the client directly (base64 / stream); S3 presigned flow remains roadmap.
 
 ## 4. Development Roadmap
 
-### Phase 1: MVP (Core Features) - **[Current Focus]**
-- Initialize FastAPI project structure (separating routers, services, and configurations).
-- Integrate LLM API and establish the prompt engineering pipeline for meditation scripts.
-- Integrate ElevenLabs TTS API with asynchronous audio processing.
-- Develop a basic Next.js UI (text input form and audio playback).
+### Phase 1: MVP — **[current baseline]**
 
-### Phase 2: User Data & Cloud Infrastructure (Enhancement)
-- Design and integrate AWS DynamoDB schemas.
-- Implement basic user authentication (JWT/Session) to track individual meditation histories.
-- Implement a caching mechanism using AWS S3 (e.g., if a similar prompt/state is requested, reuse existing audio to optimize API costs and reduce latency).
-- Write basic unit tests (Pytest) for core API endpoints.
+- [x] FastAPI layout, health, CORS, shared `httpx` client.
+- [x] LLM script + ElevenLabs speech + session + speech-stream + voice presets.
+- [x] Next.js UI: compose / listen, VoiceSphere, glass panels, slow transitions.
+- [x] **zenit** branding, **v2 prompts** (warm guide + reframing insight; no generic “hello” openers in script rules).
+- [x] **Locales:** `APP_LOCALE`, request `locale`, response `locale`; Next `LocaleProvider`, `localStorage`, EN/KO copy.
 
-### Phase 3: Venting Chat & Cloud Deployment (Expansion)
-- Introduce an interactive "Venting" chatbot using RAG (Retrieval-Augmented Generation) or conversation memory based on the user's past meditation logs.
-- Containerize the backend using Docker.
-- Deploy the backend infrastructure using AWS (e.g., EC2 or Lambda + API Gateway) and host the frontend on Vercel.
+### Phase 2: User Data & Cloud
+
+- DynamoDB, auth, S3 caching / presigned URLs, Pytest for core routes.
+
+### Phase 3: Venting & Deployment
+
+- Venting chatbot, Docker, AWS + Vercel.
 
 ## 5. Coding Guidelines for AI Assistant (Cursor Rules)
-- **English as Default Language:** Use **English by default** for everything the assistant writes or updates in this repository unless the user explicitly asks for another language for a specific item. This includes: `README`, `TODO`, `CHANGELOG`, edits to `AI_CONTEXT` (without changing locked design sections), OpenAPI titles/summaries, log messages intended for operators, proposed Git commit messages, and checklist / planning text. **Identifiers, docstrings, and user-facing API copy** should also be English unless product requirements say otherwise—so the user does not need to repeat “use English” each session.
-- **Backend-Heavy Logic:** Keep all core business logic, prompt engineering, and external API calls (LLM, TTS) strictly on the backend. The frontend should remain lightweight and API keys must be securely protected.
-- **Secrets & environment variables:** Never hardcode API keys, tokens, or other secrets in Python source, tests, or comments. Load **all** configuration (including secrets) exclusively through **`pydantic-settings`** in `app/core/config.py` (`Settings` / `get_settings()`), backed by process environment variables and optionally a **local-only** `.env` file (never commit `.env`). Do **not** scatter `os.getenv(...)` across the codebase for secrets or tunables—if a new value is needed, **add a typed field on `Settings`** so validation and documentation stay centralized. (Settings reads the same OS environment as `os.getenv`; this rule chooses one canonical entry point.)
-- **Strictly Asynchronous:** Use `async/await` for all I/O-bound operations (especially LLM and TTS network requests) to prevent blocking the event loop and ensure scalability.
-- **Clean Architecture:** Strictly separate concerns. Use `routers` for endpoint definitions, `services` for business logic, and `core/config` for environment variables and prompt templates.
-- **Robust Error Handling & Logging:** Implement clear exception handling for external API timeouts or failures, and log errors properly for easier debugging.
-- **No Over-engineering:** Stick to the requirements of the current phase. Keep the code modular but simple enough to easily explain during a technical interview. Do not introduce complex design patterns unless absolutely necessary.
+
+- **English as default (repository):** Use **English** for `README`, `TODO`, `CHANGELOG`, edits to this file (except locked product names/lines the user pins), OpenAPI operator-facing strings, commit messages, and planning text unless the user requests a specific exception.
+- **Supported product locales:** **`en` (default)** and **`ko`**. Server: `APP_LOCALE` in `.env`; optional `locale` on `POST /api/v1/meditation/script` and `POST /api/v1/meditation/session`; responses include `locale`. Client: persist UI language (e.g. `zenit-locale` in `localStorage`), send `locale` with script/session requests; `NEXT_PUBLIC_DEFAULT_LOCALE` for first paint. Repo docs stay English; **in-app** strings live in `frontend/lib/i18n.ts`.
+- **Backend-heavy:** Business logic, prompts, and third-party calls stay in FastAPI; no API keys in the browser bundle.
+- **Secrets:** Only via `Settings` in `app/core/config.py` + `.env` (never commit `.env`).
+- **Async:** `async`/`await` for LLM/TTS and external HTTP.
+- **Architecture:** Routers → services → `core` (config, prompts).
+- **Errors & logging:** Structured handling for timeouts and provider failures.
+- **No over-engineering:** Keep MVP explainable in an interview.
+
+## 6. Product Notes — zenit (locked for consistency)
+
+- **LLM persona (v2):** A warm, spacious guide (short lines, breath-friendly pacing) combined with **one crisp reframing sentence** after moments of reassurance (insight without jargon). Script language enforced by `locale` + prompt tails in `meditation_v2.py` (`PROMPT_VERSION` traceable).
+- **UI:** Inter (400/600), wide tracking on body; sticky **ZenBar** with wordmark **zenit** + locale toggle; optional SVG noise at very low opacity; **VoiceSphere** = soft pastel halo + single bright-centered orb (sage / sky / violet mist), slow breath animation while loading or during playback.

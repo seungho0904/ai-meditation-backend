@@ -31,9 +31,13 @@ async def synthesize_speech(
     client: httpx.AsyncClient,
     text: str,
     cfg: Optional[Settings] = None,
+    *,
+    voice_id: Optional[str] = None,
 ) -> tuple[bytes, bool]:
     """
     Call ElevenLabs `text-to-speech` and return MP3 bytes plus truncation flag.
+
+    ``voice_id`` overrides ``cfg.ELEVENLABS_VOICE_ID`` when set (streaming / presets).
     """
     cfg = cfg or settings
     if not cfg.ELEVENLABS_API_KEY:
@@ -46,7 +50,8 @@ async def synthesize_speech(
     if not tts_text:
         raise AppError("Cannot synthesize empty script text.", status_code=400)
 
-    url = f"{cfg.ELEVENLABS_API_BASE.rstrip('/')}/text-to-speech/{cfg.ELEVENLABS_VOICE_ID}"
+    vid = (voice_id or cfg.ELEVENLABS_VOICE_ID).strip()
+    url = f"{cfg.ELEVENLABS_API_BASE.rstrip('/')}/text-to-speech/{vid}"
     payload: dict[str, str] = {
         "text": tts_text,
         "model_id": cfg.ELEVENLABS_MODEL_ID,

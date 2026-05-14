@@ -1,41 +1,52 @@
 # Project TODO
 
-> Phase 1 per `AI_CONTEXT.md` MVP. Update this file when starting or finishing work.
+> Phase 1 per `AI_CONTEXT.md`. Update when starting or finishing work.
 
 ## Phase 1 — MVP (Core Features)
 
 ### Backend — FastAPI foundation
 
-- [x] Define Python dependencies at repo root (`requirements.txt`: FastAPI, Uvicorn, pydantic-settings, httpx)
-- [x] `app/` package layout: `main.py`, `core/` (config, logging), `routers/`, `services/`
-- [x] `pydantic-settings`-based configuration and `.env.example` (CORS, debug flags, etc.)
-- [x] API version prefix `/api/v1` and CORS (defaults for local Next.js)
-- [x] Health routes: `GET /api/v1/health/live`, `GET /api/v1/health/ready` (`ready` is a placeholder for Phase 2+ checks)
-- [x] `async` lifespan hooks (for shared HTTP clients and similar later)
-- [x] `.gitignore` (venv, `.env`, caches, etc.) and `README.md` local run instructions
+- [x] Python dependencies (`requirements.txt`: FastAPI, Uvicorn, pydantic-settings, httpx)
+- [x] `app/` layout: `main.py`, `core/`, `routers/`, `services/`
+- [x] `pydantic-settings` + `.env.example` (CORS, debug, `APP_LOCALE`, LLM/TTS keys)
+- [x] `/api/v1` prefix and CORS for local Next.js (extend origins if dev server uses non-3000 ports)
+- [x] Health: `GET /api/v1/health/live`, `GET /api/v1/health/ready` (placeholder checks until Phase 2+)
+- [x] Async lifespan (shared `httpx.AsyncClient`)
+- [x] `.gitignore`, `README.md`
 
-### Backend — LLM
+### Backend — LLM & meditation
 
-- [x] Register and tear down a shared `httpx.AsyncClient` (or per-provider clients) in lifespan
-- [x] Choose OpenAI or Anthropic and wire env-based API keys (backend-only, per `AI_CONTEXT`)
-- [x] Prompt template module for meditation scripts (under `core` or `services`, versionable)
-- [x] Pydantic schema for emotional/situational input and script-generation router + service (`async` LLM calls)
-- [x] LLM timeouts, error handling, and logging (clear HTTP responses on external API failure)
+- [x] Shared `httpx.AsyncClient` in lifespan
+- [x] OpenAI / Anthropic via `LLM_PROVIDER` and env keys
+- [x] Versioned prompts — **`meditation_v2`** (zenit persona + `locale`-aware script language; `PROMPT_VERSION` traceable)
+- [x] Pydantic schemas + `POST /meditation/script` + error handling
+- [x] Optional `locale` on script/session; default `APP_LOCALE`; response field `locale`
 
 ### Backend — ElevenLabs TTS
 
-- [x] ElevenLabs async call service layer
-- [x] Script text → audio bytes pipeline (Phase 1 architecture: tied to LLM output)
-- [ ] (Optional) Stub or minimal S3 upload + presigned URL — scope per Phase 1 workflow in `AI_CONTEXT`
+- [x] Async TTS service
+- [x] Script → audio (full MP3 + one-shot session)
+- [x] Sentence NDJSON stream + `GET /meditation/voice-presets`
+- [ ] (Optional) S3 upload + presigned URL — Phase 1 currently streams / returns bytes to client
 
-### Frontend — Next.js
+### Frontend — Next.js (zenit)
 
-- [ ] Initialize Next.js + Tailwind (monorepo vs separate directory TBD)
-- [ ] Text form for emotional / situational input
-- [ ] Display API response (script + audio URL/stream) and audio playback
+- [x] Next.js 14 + Tailwind under `frontend/`
+- [x] Context form, script display, full-session MP3 + optional sentence stream
+- [x] **zenit** branding: metadata title, ZenBar wordmark, soft-dawn UI, VoiceSphere (non-harsh orb)
+- [x] **Locales:** `LocaleProvider`, `lib/i18n.ts`, EN/KO toggle, send `locale` to API, `NEXT_PUBLIC_DEFAULT_LOCALE`
 
 ---
 
+## Phase 2+ (next)
+
+- [ ] DynamoDB schemas + basic auth (meditation history)
+- [ ] S3 caching / presigned URLs for audio
+- [ ] Pytest for core routers / services
+- [ ] Docker + deploy (AWS API + Vercel frontend)
+- [ ] Venting / chat expansion (Phase 3)
+
 ## Notes
 
-- **Current priority:** Next.js + Tailwind UI (text form, show script, play MP3 from `/meditation/session` or decode `audio_base64`).
+- **CORS:** If `npm run dev` binds to `localhost:3001+`, add each origin to `CORS_ORIGINS`.
+- **npm audit:** Vulnerability reports from `npm install` do not block `next dev`; triage with `npm audit` before `npm audit fix --force` (can introduce breaking upgrades).

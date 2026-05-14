@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    # Default script/UI language when clients omit `locale` on meditation POST bodies.
+    APP_LOCALE: Literal["en", "ko"] = "en"
+
+    @field_validator("APP_LOCALE", mode="before")
+    @classmethod
+    def normalize_app_locale(cls, v: object) -> str:
+        if v is None:
+            return "en"
+        s = str(v).strip().lower()
+        if s in ("en", "english"):
+            return "en"
+        if s in ("ko", "kr", "korean", "한국어"):
+            return "ko"
+        raise ValueError("APP_LOCALE must be 'en' or 'ko'")
+
     # --- LLM (Phase 1) ---
     LLM_PROVIDER: str = "openai"
     OPENAI_API_KEY: Optional[str] = None
@@ -56,8 +71,8 @@ class Settings(BaseSettings):
     # --- ElevenLabs TTS (Phase 1) ---
     ELEVENLABS_API_KEY: Optional[str] = None
     ELEVENLABS_API_BASE: str = "https://api.elevenlabs.io/v1"
-    # Default: premade "Rachel" — override with any valid `voice_id` from the ElevenLabs UI/API.
-    ELEVENLABS_VOICE_ID: str = "21m00TcmT4D76dWDzgHP"
+    # Default: premade soft female (Sarah) — calm / "Bella-like"; override in `.env` or use `/voice-presets`.
+    ELEVENLABS_VOICE_ID: str = "EXAVITQu4vr4xnSDxMaL"
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
     ELEVENLABS_OUTPUT_FORMAT: str = "mp3_44100_128"
     TTS_TIMEOUT_SECONDS: float = 120.0
