@@ -21,6 +21,14 @@ class MeditationScriptRequest(BaseModel):
         None,
         description='Script language: "en" or "ko". Omit to use server APP_LOCALE.',
     )
+    voice_preset: Optional[str] = Field(
+        None,
+        description="Optional TTS preset for `/session` (e.g. bella_style). Omit or `default` for ELEVENLABS_VOICE_ID.",
+    )
+    voice_id: Optional[str] = Field(
+        None,
+        description="Optional raw ElevenLabs voice_id; overrides voice_preset and env default when set.",
+    )
 
 
 class MeditationScriptResponse(BaseModel):

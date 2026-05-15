@@ -6,6 +6,57 @@ export function apiUrl(path: string): string {
   return `${base}${p}`;
 }
 
+/** FastAPI `detail` may be a string, validation array, or nested object. */
+export function formatApiErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return null;
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join(" ");
+  }
+  return fallback;
+}
+
+function errorFromResponseBody(data: unknown, status: number): string {
+  if (typeof data === "object" && data !== null && "detail" in data) {
+    return formatApiErrorDetail((data as { detail: unknown }).detail, `HTTP ${status}`);
+  }
+  return `HTTP ${status}`;
+}
+
+/** Server up + LLM/TTS keys present (no secret values exposed). */
+export type DemoReadiness = {
+  online: boolean;
+  demoReady: boolean;
+};
+
+export async function fetchDemoReadiness(timeoutMs = 5000): Promise<DemoReadiness> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(apiUrl("/api/v1/health/ready"), {
+      method: "GET",
+      signal: ctrl.signal,
+      cache: "no-store",
+    });
+    if (!r.ok) return { online: false, demoReady: false };
+    const data = (await r.json()) as { checks?: { demo_ready?: boolean } };
+    const demoReady = data.checks?.demo_ready === true;
+    return { online: true, demoReady };
+  } catch {
+    return { online: false, demoReady: false };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function postJson<T>(
   path: string,
   body: unknown,
@@ -23,14 +74,7 @@ export async function postJson<T>(
     data = { raw: text };
   }
   if (!r.ok) {
-    const detail =
-      typeof data === "object" &&
-      data !== null &&
-      "detail" in data &&
-      typeof (data as { detail: unknown }).detail === "string"
-        ? (data as { detail: string }).detail
-        : `HTTP ${r.status}`;
-    throw new Error(detail);
+    throw new Error(errorFromResponseBody(data, r.status));
   }
   return data as T;
 }
@@ -98,9 +142,10 @@ export async function streamSpeechSentences(
   if (!r.ok) {
     const t = await r.text();
     try {
-      const j = JSON.parse(t) as { detail?: string };
-      throw new Error(j.detail ?? r.statusText);
-    } catch {
+      const j = JSON.parse(t) as { detail?: unknown };
+      throw new Error(formatApiErrorDetail(j.detail, r.statusText));
+    } catch (e) {
+      if (e instanceof Error && e.message !== r.statusText) throw e;
       throw new Error(t || r.statusText);
     }
   }

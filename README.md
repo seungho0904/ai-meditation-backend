@@ -20,32 +20,74 @@ From the repository root:
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env: API keys, LLM_PROVIDER, APP_LOCALE (en | ko), CORS_ORIGINS, etc.
+npm run setup               # copies .env + frontend/.env.local only if missing
+# Edit `.env`: API keys, LLM_PROVIDER, APP_LOCALE (en | ko), CORS_ORIGINS, etc.
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+### Verify the API (smoke test)
+
+With the API running:
+
+```bash
+npm run smoke
+# or: API_BASE=http://127.0.0.1:8000 bash scripts/smoke.sh
+```
+
+Exits non-zero if `demo_ready` is false (missing LLM or ElevenLabs keys in `.env`).
+
+### One terminal: API + Next (optional)
+
+With the same **activated** `.venv` (so `python` resolves to the venv interpreter), from the repo root:
+
+```bash
+npm install
+npm run dev:stack
+```
+
+This runs the API on **127.0.0.1:8000** and `next dev` in `frontend/`. Stop with one `Ctrl+C` (`-k` tears down both).
+
 ### Frontend (Next.js)
 
-Second terminal:
+Second terminal (if you are **not** using `dev:stack`):
 
 ```bash
 cd frontend
-cp .env.local.example .env.local
+cp -n .env.local.example .env.local
 # NEXT_PUBLIC_API_BASE — API origin (default http://127.0.0.1:8000)
 # NEXT_PUBLIC_DEFAULT_LOCALE — first-visit UI locale: en | ko (default en)
 npm install
 npm run dev
 ```
 
-Open the URL printed by Next (often [http://localhost:3000](http://localhost:3000)). If ports 3000–3002 are busy, Next picks the next free port — **add that origin** to backend `CORS_ORIGINS` (comma-separated) so browser calls succeed.
+From the **repo root**, you can also run `npm run dev` / `npm run build` (they delegate to `frontend/`).
+
+Open the URL printed by Next (often [http://localhost:3000](http://localhost:3000)). Default `CORS_ORIGINS` already allows **localhost** and **127.0.0.1** on ports **3000–3002**; if Next uses another port, add that origin to `CORS_ORIGINS` (comma-separated).
+
+Opening [http://127.0.0.1:8000/](http://127.0.0.1:8000/) returns a small JSON map with links to `/docs` and health routes.
+
+### Slow or “stuck” `next build`
+
+The line **“Creating an optimized production build …”** can sit there for **several minutes** on first build (Webpack + minify + type checks). That is normal on slower disks or first run after `node_modules` / cache changes.
+
+1. **Confirm it is still working:** Activity Monitor should show **Node** using CPU (not 0% forever). If CPU is 0% for 10+ minutes, it may be wedged — cancel (`Ctrl+C`) and try step 2.
+2. **Clean and retry:**
+   ```bash
+   cd frontend
+   rm -rf .next node_modules/.cache
+   npm run build:memory
+   ```
+   `build:memory` raises the Node heap limit (helps if the process dies or stalls near OOM).
+3. **Reduce interference:** pause heavy backup / antivirus real-time scan on the project folder; close extra editors or other `node` / `next dev` processes.
+4. **File descriptor limits (macOS):** if you saw `EMFILE` during `next dev`, run `ulimit -n 10240` in the same terminal before `npm run build`.
+5. **Still failing:** upgrade Node to the current **LTS** and run `npm install` again in `frontend/`.
 
 - **API docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)  
 - **OpenAPI JSON:** [http://127.0.0.1:8000/openapi.json](http://127.0.0.1:8000/openapi.json)
 
 ## Configuration
 
-Load settings via **`pydantic-settings`** in `app/core/config.py` from the environment and optional **`.env`** (local only). Copy **`.env.example`** → **`.env`**; never commit `.env`.
+Load settings via **`pydantic-settings`** in `app/core/config.py` from the environment and optional **`.env`** (local only; **gitignored** — the app never deletes or rewrites it). Copy **`.env.example`** → **`.env`** for a new machine (`cp -n` avoids clobbering an existing file); never commit `.env`.
 
 | Area | Purpose |
 |------|---------|
@@ -64,7 +106,7 @@ Routes live under **`/api/v1`**.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/api/v1/health/live` | Process is up |
-| `GET` | `/api/v1/health/ready` | Placeholder readiness |
+| `GET` | `/api/v1/health/ready` | Config flags only (no secrets): `llm_provider`, `llm_configured`, `tts_configured`, `demo_ready` (LLM + TTS both set). |
 
 ### Meditation
 
@@ -74,7 +116,7 @@ Routes live under **`/api/v1`**.
 | `GET` | `/api/v1/meditation/voice-presets` | ElevenLabs calm presets (`bella_style`, …). |
 | `POST` | `/api/v1/meditation/speech` | Body: `{ "script": "..." }` → binary MP3. |
 | `POST` | `/api/v1/meditation/speech-stream` | NDJSON stream of sentence-sized MP3 chunks. |
-| `POST` | `/api/v1/meditation/session` | Same body as `/script` (including optional `locale`); LLM + TTS → `script`, `locale`, `audio_base64`, `audio_truncated`. |
+| `POST` | `/api/v1/meditation/session` | Same body as `/script` plus optional `voice_preset` / `voice_id` for TTS; LLM + TTS → `script`, `locale`, `audio_base64`, `audio_truncated`. |
 
 Prompts live in **`app/core/prompts/meditation_v2.py`** (version string in responses). Errors: JSON `{ "detail": "<message>" }` for `AppError`.
 
@@ -92,6 +134,7 @@ frontend/              # Next.js 14 + Tailwind
   components/
   lib/                 # api.ts, i18n.ts
 requirements.txt
+tests/README.md        # automated tests deferred for MVP; folder kept for future
 .env.example
 AI_CONTEXT.md
 CHANGELOG.md
@@ -102,6 +145,10 @@ TODO.md
 
 - Shared **`httpx.AsyncClient`** in app lifespan; read timeout `max(LLM_TIMEOUT_SECONDS, TTS_TIMEOUT_SECONDS)`.
 - New tunables: add typed fields on **`Settings`**, not scattered `os.getenv`.
+
+### Automated tests
+
+**Deferred** while MVP/demo work is prioritized. See **`tests/README.md`**. No `pytest` in `requirements.txt` for now.
 
 ## License
 

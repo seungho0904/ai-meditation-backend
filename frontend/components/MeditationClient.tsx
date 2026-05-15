@@ -4,6 +4,7 @@ import { useLocale } from "@/components/LocaleProvider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import VoiceSphere from "@/components/VoiceSphere";
 import {
+  fetchDemoReadiness,
   fetchVoicePresets,
   postJson,
   streamSpeechSentences,
@@ -17,6 +18,8 @@ const MIN_CONTEXT = 10;
 
 type View = "compose" | "listen";
 
+type ApiConnectivity = "checking" | "offline" | "misconfigured" | "ready";
+
 export default function MeditationClient() {
   const { locale, t } = useLocale();
   const [view, setView] = useState<View>("compose");
@@ -25,12 +28,24 @@ export default function MeditationClient() {
   const [sessionAudioUrl, setSessionAudioUrl] = useState<string | null>(null);
   const [presets, setPresets] = useState<VoicePresetRow[]>([]);
   const [voicePreset, setVoicePreset] = useState<string>("bella_style");
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busyKind, setBusyKind] = useState<"script" | "session" | "stream" | null>(null);
+  const [streamChunkPlayed, setStreamChunkPlayed] = useState(0);
+  const busy = busyKind !== null;
   const [error, setError] = useState<string | null>(null);
   const [audioActive, setAudioActive] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
+  const [audioTruncated, setAudioTruncated] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [connectivity, setConnectivity] = useState<ApiConnectivity>("checking");
+
+  const refreshApiStatus = useCallback(() => {
+    void fetchDemoReadiness().then((r) => {
+      if (!r.online) setConnectivity("offline");
+      else if (!r.demoReady) setConnectivity("misconfigured");
+      else setConnectivity("ready");
+    });
+  }, []);
 
   const greeting = useMemo(() => {
     const pair = greetings[locale];
@@ -38,10 +53,27 @@ export default function MeditationClient() {
   }, [locale]);
 
   useEffect(() => {
+    refreshApiStatus();
+  }, [refreshApiStatus]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") refreshApiStatus();
+    };
+    window.addEventListener("online", refreshApiStatus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("online", refreshApiStatus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [refreshApiStatus]);
+
+  useEffect(() => {
+    if (connectivity !== "ready") return;
     fetchVoicePresets()
       .then(setPresets)
       .catch(() => setPresets([]));
-  }, []);
+  }, [connectivity]);
 
   const revokeSessionUrl = useCallback(() => {
     if (sessionAudioUrl) {
@@ -80,6 +112,15 @@ export default function MeditationClient() {
     if (el && sessionAudioUrl) el.volume = 0.88;
   }, [sessionAudioUrl]);
 
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!sessionAudioUrl || !el) return;
+    el.load();
+    void el.play().catch(() => {
+      /* Autoplay may be blocked until user gesture; Play button remains available. */
+    });
+  }, [sessionAudioUrl]);
+
   const resetToCompose = () => {
     revokeSessionUrl();
     setView("compose");
@@ -87,44 +128,61 @@ export default function MeditationClient() {
     setError(null);
     setAudioActive(false);
     setPlaying(false);
+    setBusyKind(null);
+    setStreamChunkPlayed(0);
+    setAudioTruncated(false);
+    setStreamOpen(false);
   };
 
   const onPrepareWords = async () => {
     setError(null);
     revokeSessionUrl();
+    setAudioTruncated(false);
     if (context.trim().length < MIN_CONTEXT) {
       setError(t.errMinChars(MIN_CONTEXT));
       return;
     }
-    setBusy("…");
+    setBusyKind("script");
     try {
       const data = await postJson<ScriptResponse>("/api/v1/meditation/script", {
         context: context.trim(),
         locale,
       });
       setScript(data.script);
+      setStreamOpen(true);
       setView("listen");
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errGeneric);
     } finally {
-      setBusy(null);
+      setBusyKind(null);
     }
   };
 
   const onBeginSession = async () => {
     setError(null);
     revokeSessionUrl();
+    setAudioTruncated(false);
     if (context.trim().length < MIN_CONTEXT) {
       setError(t.errMinChars(MIN_CONTEXT));
       return;
     }
-    setBusy("…");
+    setBusyKind("session");
     try {
-      const data = await postJson<SessionResponse>("/api/v1/meditation/session", {
+      const sessionBody: {
+        context: string;
+        locale: typeof locale;
+        voice_preset?: string;
+      } = {
         context: context.trim(),
         locale,
-      });
+      };
+      if (voicePreset !== "default") {
+        sessionBody.voice_preset = voicePreset;
+      }
+      const data = await postJson<SessionResponse>("/api/v1/meditation/session", sessionBody);
       setScript(data.script);
+      setAudioTruncated(data.audio_truncated);
+      setStreamOpen(false);
       const bin = atob(data.audio_base64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -134,25 +192,29 @@ export default function MeditationClient() {
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errGeneric);
     } finally {
-      setBusy(null);
+      setBusyKind(null);
     }
   };
 
   const onStreamVoice = async () => {
     if (!script?.trim()) return;
     setError(null);
-    setBusy("…");
+    setStreamChunkPlayed(0);
+    setBusyKind("stream");
     setAudioActive(true);
     try {
       await streamSpeechSentences(
         script,
         voicePreset === "default" ? undefined : voicePreset,
-        () => {},
+        (index) => {
+          setStreamChunkPlayed((p) => Math.max(p, index + 1));
+        },
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errStream);
     } finally {
-      setBusy(null);
+      setBusyKind(null);
+      setStreamChunkPlayed(0);
       setAudioActive(false);
     }
   };
@@ -165,11 +227,54 @@ export default function MeditationClient() {
   };
 
   const sphereBreathing =
-    view === "compose" ? !!busy : !!(audioActive || busy);
+    view === "compose" ? busy : !!(audioActive || busy);
+
+  const apiBlocked = connectivity !== "ready";
 
   return (
     <div className="flex flex-1 flex-col">
       <audio ref={audioRef} src={sessionAudioUrl ?? undefined} className="hidden" preload="auto" />
+
+      {view === "compose" && connectivity === "checking" && (
+        <div
+          role="status"
+          className="zen-view-in mx-auto mb-6 w-full max-w-xl rounded-2xl border border-slate-200/80 bg-white/80 px-5 py-4 text-center shadow-sm"
+        >
+          <p className="text-sm font-normal leading-relaxed tracking-wide text-slate-600">{t.apiChecking}</p>
+        </div>
+      )}
+
+      {view === "compose" && connectivity === "offline" && (
+        <div
+          role="status"
+          className="zen-view-in mx-auto mb-6 w-full max-w-xl rounded-2xl border border-amber-200/80 bg-amber-50/90 px-5 py-4 text-center shadow-sm"
+        >
+          <p className="text-sm font-normal leading-relaxed tracking-wide text-amber-950">{t.apiOffline}</p>
+          <button
+            type="button"
+            className="mt-4 rounded-full border border-amber-300/80 bg-white/90 px-5 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-amber-900 transition-all duration-1000 hover:bg-white"
+            onClick={() => void refreshApiStatus()}
+          >
+            {t.apiRetry}
+          </button>
+        </div>
+      )}
+
+      {view === "compose" && connectivity === "misconfigured" && (
+        <div
+          role="status"
+          className="zen-view-in mx-auto mb-6 w-full max-w-xl rounded-2xl border border-violet-200/90 bg-violet-50/90 px-5 py-4 text-center shadow-sm"
+        >
+          <p className="text-sm font-normal leading-relaxed tracking-wide text-violet-950">{t.apiMisconfigured}</p>
+          <button
+            type="button"
+            className="mt-4 rounded-full border border-violet-300/80 bg-white/90 px-5 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-violet-900 transition-all duration-1000 hover:bg-white"
+            onClick={() => void refreshApiStatus()}
+          >
+            {t.apiRetry}
+          </button>
+        </div>
+      )}
 
       {view === "compose" && (
         <div
@@ -205,8 +310,8 @@ export default function MeditationClient() {
                 id="voice"
                 value={voicePreset}
                 onChange={(e) => setVoicePreset(e.target.value)}
-                disabled={!!busy}
-                className="w-full cursor-pointer rounded-2xl border border-slate-200/90 bg-white/65 px-6 py-4 text-sm font-normal tracking-wide text-slate-600 shadow-sm backdrop-blur-md transition-all duration-1000 ease-out focus:border-emerald-300/70 focus:outline-none disabled:opacity-50"
+                disabled={busy || apiBlocked}
+                className="w-full cursor-pointer rounded-2xl border border-slate-200/90 bg-white/65 px-6 py-4 text-sm font-normal tracking-wide text-slate-600 shadow-sm backdrop-blur-md transition-all duration-1000 ease-out focus:border-emerald-300/70 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="default">{t.voiceDefaultOption}</option>
                 {presets.map((p) => (
@@ -218,7 +323,7 @@ export default function MeditationClient() {
 
               <button
                 type="button"
-                disabled={!!busy}
+                disabled={busy || apiBlocked}
                 onClick={() => void onBeginSession()}
                 className="w-full rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-50/95 via-white/90 to-sky-50/90 px-8 py-5 text-sm font-semibold tracking-[0.14em] text-slate-700 shadow-sm transition-all duration-1000 ease-out hover:border-emerald-400/60 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -227,9 +332,9 @@ export default function MeditationClient() {
 
               <button
                 type="button"
-                disabled={!!busy}
+                disabled={busy || apiBlocked}
                 onClick={() => void onPrepareWords()}
-                className="text-center text-sm font-normal tracking-wide text-slate-500 underline-offset-[10px] transition-colors duration-1000 ease-out hover:text-emerald-700 hover:underline disabled:opacity-40"
+                className="text-center text-sm font-normal tracking-wide text-slate-500 underline-offset-[10px] transition-colors duration-1000 ease-out hover:text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.wordsOnly}
               </button>
@@ -243,12 +348,40 @@ export default function MeditationClient() {
           key="listen"
           className="zen-view-in flex flex-1 flex-col items-center transition-opacity duration-1000 ease-out"
         >
-          <VoiceSphere breathing={sphereBreathing} dimmed={!!busy && !audioActive} />
+          <VoiceSphere breathing={sphereBreathing} dimmed={busy && !audioActive} />
 
           <div className="glass-panel mt-4 w-full max-w-xl px-9 py-10 md:mt-6 md:px-12 md:py-14">
             <article className="max-h-[min(48vh,28rem)] overflow-y-auto whitespace-pre-wrap text-center text-[0.95rem] font-normal leading-relaxed tracking-wide text-slate-600 md:text-base">
               {script}
             </article>
+
+            {audioTruncated && (
+              <p
+                role="status"
+                className="mt-6 text-center text-xs font-normal leading-relaxed tracking-wide text-amber-800/90"
+              >
+                {t.audioTruncated}
+              </p>
+            )}
+
+            {!sessionAudioUrl && (
+              <p className="mt-8 text-center text-sm font-normal leading-relaxed tracking-wide text-slate-500">
+                {t.wordsOnlyListen}
+              </p>
+            )}
+
+            {!sessionAudioUrl && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  type="button"
+                  disabled={busy || apiBlocked}
+                  onClick={() => void onStreamVoice()}
+                  className="rounded-2xl border border-emerald-400/40 bg-gradient-to-r from-emerald-50/95 via-white/90 to-sky-50/90 px-8 py-4 text-sm font-semibold tracking-[0.12em] text-slate-700 shadow-sm transition-all duration-1000 ease-out hover:border-emerald-400/60 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {busyKind === "stream" ? t.progressStream : t.streamVoice}
+                </button>
+              </div>
+            )}
 
             {sessionAudioUrl && (
               <div className="mt-12 flex justify-center md:mt-14">
@@ -276,9 +409,9 @@ export default function MeditationClient() {
               </p>
               <button
                 type="button"
-                disabled={!!busy}
+                disabled={busy || apiBlocked}
                 onClick={() => void onStreamVoice()}
-                className="mt-6 w-full rounded-2xl border border-slate-200/80 bg-white/55 py-4 text-xs font-normal tracking-wide text-slate-500 backdrop-blur-md transition-all duration-1000 hover:bg-white/80 disabled:opacity-40"
+                className="mt-6 w-full rounded-2xl border border-slate-200/80 bg-white/55 py-4 text-xs font-normal tracking-wide text-slate-500 backdrop-blur-md transition-all duration-1000 hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t.streamVoice}
               </button>
@@ -306,10 +439,23 @@ export default function MeditationClient() {
         </div>
       )}
 
-      {busy && !error && (
-        <p className="mt-8 text-center text-xs font-normal tracking-[0.28em] text-slate-400 transition-opacity duration-1000">
-          …
-        </p>
+      {busyKind && !error && (
+        <div
+          className="mx-auto mt-8 w-full max-w-md px-4 text-center transition-opacity duration-1000"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <p className="text-xs font-normal tracking-[0.2em] text-slate-500">
+            {busyKind === "script" && t.progressScript}
+            {busyKind === "session" && t.progressSession}
+            {busyKind === "stream" &&
+              (streamChunkPlayed > 0 ? t.progressStreamChunk(streamChunkPlayed) : t.progressStream)}
+          </p>
+          <div className="zen-progress-track" aria-hidden>
+            <div className="zen-progress-fill" />
+          </div>
+        </div>
       )}
     </div>
   );

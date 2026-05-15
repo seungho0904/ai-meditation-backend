@@ -49,6 +49,18 @@ export const ui = {
     errMinChars: (n: number) => `A few more words — at least ${n} characters.`,
     errGeneric: "Something slowed us down. Please try again.",
     errStream: "The listening path paused.",
+    apiOffline:
+      "Cannot reach the meditation API. Start the backend on port 8000, then use “Retry” or switch back to this tab.",
+    apiRetry: "Retry connection",
+    apiMisconfigured:
+      "The API is running, but OpenAI/Anthropic or ElevenLabs keys are missing in the server `.env`. Add your keys there (they are not stored in git) and restart uvicorn.",
+    apiChecking: "Checking connection to the meditation API…",
+    audioTruncated: "The voice was shortened to fit provider limits. You can still read the full script above.",
+    wordsOnlyListen: "Your words are ready. Stream the voice below, or return to start a full session with audio.",
+    progressScript: "Writing your meditation…",
+    progressSession: "Preparing voice and script…",
+    progressStream: "Streaming audio…",
+    progressStreamChunk: (n: number) => `Playing sentence ${n}…`,
   },
   ko: {
     contextLabel: "지금 마음에 가장 가까이 있는 것을 적어 주세요.",
@@ -67,6 +79,18 @@ export const ui = {
     errMinChars: (n: number) => `조금만 더 적어 주세요. 최소 ${n}자입니다.`,
     errGeneric: "잠시 느려졌습니다. 다시 시도해 주세요.",
     errStream: "듣기 경로가 잠시 멈췄습니다.",
+    apiOffline:
+      "명상 API에 연결할 수 없어요. 백엔드를 8000 포트로 실행한 뒤 「다시 연결」을 누르거나 이 탭으로 돌아와 주세요.",
+    apiRetry: "다시 연결",
+    apiMisconfigured:
+      "API는 떠 있지만 서버 `.env`에 OpenAI/Anthropic 또는 ElevenLabs 키가 없어요. 키를 넣고(깃에는 올라가지 않습니다) uvicorn을 다시 실행해 주세요.",
+    apiChecking: "명상 API 연결을 확인하고 있어요…",
+    audioTruncated: "음성 제공 한도 때문에 목소리가 일부 잘렸어요. 위 글은 전체를 읽을 수 있습니다.",
+    wordsOnlyListen: "글이 준비됐어요. 아래에서 음성을 스트리밍하거나, 돌아가서 전체 세션을 시작할 수 있어요.",
+    progressScript: "명상 글을 쓰고 있어요…",
+    progressSession: "목소리와 글을 준비하고 있어요…",
+    progressStream: "소리를 이어 붙이고 있어요…",
+    progressStreamChunk: (n: number) => `${n}번째 문장 재생 중…`,
   },
 } as const;
 

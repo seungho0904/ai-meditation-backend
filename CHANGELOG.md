@@ -33,3 +33,7 @@ All notable changes to this project will be documented in this file.
 - **Frontend — i18n:** `LocaleProvider` (`localStorage` key `zenit-locale`), `lib/i18n.ts` copy for `en` / `ko`, `document.documentElement.lang` sync, `NEXT_PUBLIC_DEFAULT_LOCALE` in `.env.local.example`.
 - **Frontend — UX:** **VoiceSphere** **soft dawn** look (pastel halo, bright-centered pearl orb, sage/sky mist); page base **~`#e8ecf4`**, light glass panels, subtle noise; slow transitions (~1s) and slow breath animation while loading or during playback.
 - **Docs:** `README.md`, `AI_CONTEXT.md`, `TODO.md`, `CHANGELOG.md` aligned with current MVP.
+- **Frontend — connectivity:** `fetchDemoReadiness()` calls `GET /api/v1/health/ready` to separate **API offline** vs **keys missing** (`demo_ready`); compose view shows amber (offline) or violet (misconfigured) banners + retry.
+- **Session + voice:** `POST /meditation/session` accepts optional `voice_preset` / `voice_id`; full-session MP3 uses the same preset resolution as streaming.
+- **Run locally:** default `CORS_ORIGINS` covers localhost / 127.0.0.1 ports 3000–3002; `GET /` on the API returns doc links; root `npm run dev:stack` runs API + Next together (`concurrently`).
+- **MVP polish:** session MP3 auto-plays after **Begin**; words-only listen view surfaces stream CTA; `npm run setup` / `npm run smoke` scripts; improved FastAPI error messages in the UI.

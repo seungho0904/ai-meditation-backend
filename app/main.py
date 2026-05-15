@@ -53,6 +53,19 @@ def create_app() -> FastAPI:
     )
     application.include_router(health.router, prefix=settings.API_V1_STR)
     application.include_router(meditation.router, prefix=settings.API_V1_STR)
+
+    @application.get("/", include_in_schema=False)
+    async def root() -> dict[str, str]:
+        """Human-friendly entry when opening the API base URL in a browser."""
+        return {
+            "service": settings.PROJECT_NAME,
+            "api_v1": settings.API_V1_STR,
+            "docs": "/docs",
+            "openapi": "/openapi.json",
+            "health_live": f"{settings.API_V1_STR}/health/live",
+            "health_ready": f"{settings.API_V1_STR}/health/ready",
+        }
+
     return application
 
 

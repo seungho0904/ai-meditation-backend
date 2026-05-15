@@ -13,6 +13,7 @@ from app.schemas.meditation import (
     MeditationScriptResponse,
     MeditationSessionResponse,
 )
+from app.core.voice_presets import resolve_voice_id
 from app.services.llm import generate_meditation_script
 from app.services.tts import synthesize_speech
 
@@ -27,7 +28,14 @@ async def generate_script_and_audio(
     """
     cfg = cfg or settings
     script_resp: MeditationScriptResponse = await generate_meditation_script(client, body, cfg)
-    audio_bytes, audio_truncated = await synthesize_speech(client, script_resp.script, cfg)
+    vid, _ = resolve_voice_id(
+        voice_id=body.voice_id,
+        voice_preset=body.voice_preset,
+        default_voice_id=cfg.ELEVENLABS_VOICE_ID,
+    )
+    audio_bytes, audio_truncated = await synthesize_speech(
+        client, script_resp.script, cfg, voice_id=vid
+    )
     b64 = base64.b64encode(audio_bytes).decode("ascii")
 
     return MeditationSessionResponse(

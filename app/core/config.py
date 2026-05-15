@@ -28,8 +28,13 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
 
-    # Comma-separated in .env; parsed to list for CORSMiddleware
-    CORS_ORIGINS: str = "http://localhost:3000"
+    # Comma-separated in .env; parsed to list for CORSMiddleware.
+    # Defaults cover Next dev on localhost vs 127.0.0.1 and ports 3000–3002.
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001,"
+        "http://localhost:3002,http://127.0.0.1:3002"
+    )
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

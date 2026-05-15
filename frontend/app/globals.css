@@ -111,3 +111,22 @@ body {
     @apply rounded-3xl border border-white/50 bg-white/35 backdrop-blur-xl;
   }
 }
+
+/* Indeterminate progress (LLM / TTS / stream wait) */
+@keyframes zen-progress-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.zen-progress-track {
+  @apply relative mx-auto mt-3 h-1 w-full max-w-xs overflow-hidden rounded-full bg-slate-200/90;
+}
+
+.zen-progress-fill {
+  @apply absolute inset-y-0 left-0 w-[38%] rounded-full bg-gradient-to-r from-emerald-400/70 to-sky-400/60;
+  animation: zen-progress-slide 1.35s ease-in-out infinite;
+}
