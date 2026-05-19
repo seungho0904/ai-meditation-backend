@@ -126,11 +126,18 @@ function playMp3Base64(b64: string): Promise<void> {
   });
 }
 
+export type StreamSpeechCallbacks = {
+  onChunk: (index: number, text: string) => void;
+  onMetadata?: (chunkCount: number) => void;
+};
+
 export async function streamSpeechSentences(
   script: string,
   voicePreset: string | undefined,
-  onChunk: (index: number, text: string) => void,
+  callbacks: StreamSpeechCallbacks | ((index: number, text: string) => void),
 ): Promise<void> {
+  const onChunk = typeof callbacks === "function" ? callbacks : callbacks.onChunk;
+  const onMetadata = typeof callbacks === "function" ? undefined : callbacks.onMetadata;
   const r = await fetch(apiUrl("/api/v1/meditation/speech-stream"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -168,7 +175,12 @@ export async function streamSpeechSentences(
         index?: number;
         text?: string;
         audio_base64?: string;
+        chunk_count?: number;
       };
+      if (obj.type === "metadata" && typeof obj.chunk_count === "number") {
+        onMetadata?.(obj.chunk_count);
+        continue;
+      }
       if (obj.type === "chunk" && obj.audio_base64 && obj.text !== undefined) {
         onChunk(obj.index ?? 0, obj.text);
         await playMp3Base64(obj.audio_base64);

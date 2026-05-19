@@ -130,3 +130,12 @@ body {
   @apply absolute inset-y-0 left-0 w-[38%] rounded-full bg-gradient-to-r from-emerald-400/70 to-sky-400/60;
   animation: zen-progress-slide 1.35s ease-in-out infinite;
 }
+
+/* Determinate session progress (audio / stream playback) */
+.zen-session-progress-track {
+  @apply relative h-1.5 w-full overflow-hidden rounded-full bg-slate-200/90;
+}
+
+.zen-session-progress-fill {
+  @apply h-full rounded-full bg-gradient-to-r from-emerald-400/80 to-sky-400/70 transition-[width] duration-300 ease-out;
+}

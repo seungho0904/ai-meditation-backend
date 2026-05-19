@@ -37,3 +37,4 @@ All notable changes to this project will be documented in this file.
 - **Session + voice:** `POST /meditation/session` accepts optional `voice_preset` / `voice_id`; full-session MP3 uses the same preset resolution as streaming.
 - **Run locally:** default `CORS_ORIGINS` covers localhost / 127.0.0.1 ports 3000–3002; `GET /` on the API returns doc links; root `npm run dev:stack` runs API + Next together (`concurrently`).
 - **MVP polish:** session MP3 auto-plays after **Begin**; words-only listen view surfaces stream CTA; `npm run setup` / `npm run smoke` scripts; improved FastAPI error messages in the UI.
+- **Session length & progress:** LLM prompts target a fixed **3–5 minute** beginner session (no duration picker); listen view shows elapsed/total timer and progress bar for full-session audio and sentence streaming (`SessionProgress`, `meditation_v2_zenit_3to5min`).

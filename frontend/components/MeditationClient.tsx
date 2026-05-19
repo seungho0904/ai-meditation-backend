@@ -2,6 +2,7 @@
 
 import { useLocale } from "@/components/LocaleProvider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SessionProgress from "@/components/SessionProgress";
 import VoiceSphere from "@/components/VoiceSphere";
 import {
   fetchDemoReadiness,
@@ -13,6 +14,10 @@ import {
   type VoicePresetRow,
 } from "@/lib/api";
 import { greetings } from "@/lib/i18n";
+import {
+  clampSessionEstimate,
+  estimateScriptDurationSeconds,
+} from "@/lib/sessionTiming";
 
 const MIN_CONTEXT = 10;
 
@@ -36,8 +41,18 @@ export default function MeditationClient() {
   const [playing, setPlaying] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
   const [audioTruncated, setAudioTruncated] = useState(false);
+  const [playback, setPlayback] = useState({ current: 0, duration: 0 });
+  const [sessionComplete, setSessionComplete] = useState(false);
+  const [streamChunkTotal, setStreamChunkTotal] = useState(0);
+  const [streamElapsed, setStreamElapsed] = useState(0);
+  const streamStartRef = useRef<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [connectivity, setConnectivity] = useState<ApiConnectivity>("checking");
+
+  const estimatedSessionSeconds = useMemo(() => {
+    if (!script) return 5 * 60;
+    return clampSessionEstimate(estimateScriptDurationSeconds(script, locale));
+  }, [script, locale]);
 
   const refreshApiStatus = useCallback(() => {
     void fetchDemoReadiness().then((r) => {
@@ -96,16 +111,50 @@ export default function MeditationClient() {
     const onEnded = () => {
       setAudioActive(false);
       setPlaying(false);
+      setSessionComplete(true);
+      setPlayback((p) => ({
+        current: p.duration > 0 ? p.duration : p.current,
+        duration: p.duration > 0 ? p.duration : estimatedSessionSeconds,
+      }));
+    };
+    const onTimeUpdate = () => {
+      const dur =
+        Number.isFinite(el.duration) && el.duration > 0 ? el.duration : estimatedSessionSeconds;
+      setPlayback({ current: el.currentTime, duration: dur });
+    };
+    const onLoadedMetadata = () => {
+      const dur =
+        Number.isFinite(el.duration) && el.duration > 0 ? el.duration : estimatedSessionSeconds;
+      setPlayback({ current: el.currentTime, duration: dur });
     };
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
     el.addEventListener("ended", onEnded);
+    el.addEventListener("timeupdate", onTimeUpdate);
+    el.addEventListener("loadedmetadata", onLoadedMetadata);
     return () => {
       el.removeEventListener("play", onPlay);
       el.removeEventListener("pause", onPause);
       el.removeEventListener("ended", onEnded);
+      el.removeEventListener("timeupdate", onTimeUpdate);
+      el.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
-  }, [sessionAudioUrl]);
+  }, [sessionAudioUrl, estimatedSessionSeconds]);
+
+  useEffect(() => {
+    if (busyKind !== "stream") {
+      streamStartRef.current = null;
+      return;
+    }
+    streamStartRef.current = Date.now();
+    setStreamElapsed(0);
+    const id = window.setInterval(() => {
+      if (streamStartRef.current) {
+        setStreamElapsed(Math.floor((Date.now() - streamStartRef.current) / 1000));
+      }
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [busyKind]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -132,7 +181,44 @@ export default function MeditationClient() {
     setStreamChunkPlayed(0);
     setAudioTruncated(false);
     setStreamOpen(false);
+    setPlayback({ current: 0, duration: 0 });
+    setSessionComplete(false);
+    setStreamChunkTotal(0);
+    setStreamElapsed(0);
   };
+
+  const sessionProgressView = useMemo(() => {
+    const total =
+      playback.duration > 0 ? playback.duration : estimatedSessionSeconds;
+    if (sessionComplete) {
+      return { ratio: 1, elapsed: total, total, complete: true };
+    }
+    if (sessionAudioUrl) {
+      const ratio = total > 0 ? playback.current / total : 0;
+      return { ratio, elapsed: playback.current, total, complete: false };
+    }
+    if (busyKind === "stream") {
+      const chunkRatio =
+        streamChunkTotal > 0 ? Math.min(1, streamChunkPlayed / streamChunkTotal) : 0;
+      const timeRatio = total > 0 ? Math.min(1, streamElapsed / total) : 0;
+      return {
+        ratio: Math.min(1, Math.max(chunkRatio, timeRatio)),
+        elapsed: streamElapsed,
+        total,
+        complete: false,
+      };
+    }
+    return null;
+  }, [
+    sessionComplete,
+    sessionAudioUrl,
+    playback,
+    estimatedSessionSeconds,
+    busyKind,
+    streamChunkTotal,
+    streamChunkPlayed,
+    streamElapsed,
+  ]);
 
   const onPrepareWords = async () => {
     setError(null);
@@ -149,6 +235,8 @@ export default function MeditationClient() {
         locale,
       });
       setScript(data.script);
+      setSessionComplete(false);
+      setPlayback({ current: 0, duration: 0 });
       setStreamOpen(true);
       setView("listen");
     } catch (e) {
@@ -181,6 +269,8 @@ export default function MeditationClient() {
       }
       const data = await postJson<SessionResponse>("/api/v1/meditation/session", sessionBody);
       setScript(data.script);
+      setSessionComplete(false);
+      setPlayback({ current: 0, duration: 0 });
       setAudioTruncated(data.audio_truncated);
       setStreamOpen(false);
       const bin = atob(data.audio_base64);
@@ -200,21 +290,24 @@ export default function MeditationClient() {
     if (!script?.trim()) return;
     setError(null);
     setStreamChunkPlayed(0);
+    setStreamChunkTotal(0);
+    setSessionComplete(false);
     setBusyKind("stream");
     setAudioActive(true);
     try {
-      await streamSpeechSentences(
-        script,
-        voicePreset === "default" ? undefined : voicePreset,
-        (index) => {
+      await streamSpeechSentences(script, voicePreset === "default" ? undefined : voicePreset, {
+        onMetadata: (count) => setStreamChunkTotal(count),
+        onChunk: (index) => {
           setStreamChunkPlayed((p) => Math.max(p, index + 1));
         },
-      );
+      });
+      setSessionComplete(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errStream);
     } finally {
       setBusyKind(null);
       setStreamChunkPlayed(0);
+      setStreamChunkTotal(0);
       setAudioActive(false);
     }
   };
@@ -329,6 +422,7 @@ export default function MeditationClient() {
               >
                 {busy ? t.beginBusy : t.begin}
               </button>
+              <p className="text-center text-xs font-normal tracking-wide text-slate-400">{t.sessionLengthHint}</p>
 
               <button
                 type="button"
@@ -351,6 +445,24 @@ export default function MeditationClient() {
           <VoiceSphere breathing={sphereBreathing} dimmed={busy && !audioActive} />
 
           <div className="glass-panel mt-4 w-full max-w-xl px-9 py-10 md:mt-6 md:px-12 md:py-14">
+            {sessionProgressView && (
+              <SessionProgress
+                t={t}
+                ratio={sessionProgressView.ratio}
+                elapsedSeconds={sessionProgressView.elapsed}
+                totalSeconds={sessionProgressView.total}
+                complete={sessionProgressView.complete}
+                detail={
+                  busyKind === "stream" && streamChunkTotal > 0
+                    ? t.sessionStreamDetail(
+                        Math.min(streamChunkPlayed, streamChunkTotal),
+                        streamChunkTotal,
+                      )
+                    : null
+                }
+              />
+            )}
+
             <article className="max-h-[min(48vh,28rem)] overflow-y-auto whitespace-pre-wrap text-center text-[0.95rem] font-normal leading-relaxed tracking-wide text-slate-600 md:text-base">
               {script}
             </article>
