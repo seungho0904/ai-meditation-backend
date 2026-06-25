@@ -10,6 +10,7 @@ import httpx
 
 from app.core.config import Settings, settings
 from app.core.exceptions import AppError
+from app.core.http_errors import raise_tts_http_error, raise_tts_transport_error
 
 logger = logging.getLogger(__name__)
 
@@ -75,16 +76,10 @@ async def synthesize_speech(
     except httpx.HTTPStatusError as e:
         body = (e.response.text or "")[:2000]
         logger.warning("TTS HTTP error status=%s body=%s", e.response.status_code, body)
-        raise AppError(
-            "ElevenLabs returned an error. Check server logs for details.",
-            status_code=502,
-        ) from e
+        raise_tts_http_error(e)
     except httpx.RequestError as e:
         logger.error("TTS transport error: %s", e)
-        raise AppError(
-            "Could not reach ElevenLabs. Verify network connectivity and DNS.",
-            status_code=502,
-        ) from e
+        raise_tts_transport_error(e)
 
     audio = r.content
     if not audio:

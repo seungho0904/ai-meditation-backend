@@ -28,7 +28,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     setup_logging(settings.DEBUG)
     read_timeout = max(settings.LLM_TIMEOUT_SECONDS, settings.TTS_TIMEOUT_SECONDS)
     timeout = httpx.Timeout(connect=10.0, read=read_timeout, write=30.0, pool=5.0)
-    app.state.http_client = httpx.AsyncClient(timeout=timeout)
+    # Do not route OpenAI/ElevenLabs through HTTP_PROXY (common on dev Macs; causes 403).
+    app.state.http_client = httpx.AsyncClient(timeout=timeout, trust_env=False)
     yield
     await app.state.http_client.aclose()
 

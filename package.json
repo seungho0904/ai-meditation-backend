@@ -6,7 +6,8 @@
     "setup": "bash scripts/setup-env.sh",
     "smoke": "bash scripts/smoke.sh",
     "dev": "npm run dev --prefix frontend",
-    "dev:stack": "concurrently -k -n api,web -c blue,green \"python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000\" \"npm run dev --prefix frontend\"",
+    "dev:api": "bash scripts/run-api-dev.sh",
+    "dev:stack": "concurrently -k -n api,web -c blue,green \"bash scripts/run-api-dev.sh\" \"npm run dev --prefix frontend\"",
     "build": "npm run build --prefix frontend",
     "start": "npm run start --prefix frontend",
     "lint": "npm run lint --prefix frontend"

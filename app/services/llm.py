@@ -9,6 +9,7 @@ import httpx
 
 from app.core.config import Settings, settings
 from app.core.exceptions import AppError
+from app.core.http_errors import raise_llm_http_error, raise_llm_transport_error
 from app.core.prompts import PROMPT_VERSION, format_user_message, system_prompt
 from app.schemas.meditation import MeditationScriptRequest, MeditationScriptResponse
 
@@ -141,16 +142,10 @@ async def generate_meditation_script(
             e.response.status_code,
             text,
         )
-        raise AppError(
-            "LLM provider returned an error. Check server logs for details.",
-            status_code=502,
-        ) from e
+        raise_llm_http_error(e)
     except httpx.RequestError as e:
         logger.error("LLM transport error: %s", e)
-        raise AppError(
-            "Could not reach LLM provider. Verify network connectivity and DNS.",
-            status_code=502,
-        ) from e
+        raise_llm_transport_error(e)
 
     if not script:
         raise AppError("LLM returned an empty script.", status_code=502)

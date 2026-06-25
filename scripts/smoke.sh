@@ -5,17 +5,27 @@ set -euo pipefail
 API_BASE="${API_BASE:-http://127.0.0.1:8000}"
 V1="${API_BASE}/api/v1"
 
+_curl_fail() {
+  echo ""
+  echo "✗ Could not reach ${API_BASE}"
+  echo "  Start the API in another terminal (leave it running):"
+  echo "    cd $(dirname "$0")/.. && source .venv/bin/activate"
+  echo "    uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8000"
+  exit 1
+}
+
 echo "→ GET ${API_BASE}/"
-curl -sf "${API_BASE}/" | head -c 200
+RESP="$(curl -sf "${API_BASE}/" 2>/dev/null)" || _curl_fail
+echo "${RESP}" | head -c 200
 echo ""
 echo ""
 
 echo "→ GET ${V1}/health/live"
-curl -sf "${V1}/health/live"
+curl -sf "${V1}/health/live" || _curl_fail
 echo ""
 
 echo "→ GET ${V1}/health/ready"
-READY_JSON="$(curl -sf "${V1}/health/ready")"
+READY_JSON="$(curl -sf "${V1}/health/ready" 2>/dev/null)" || _curl_fail
 echo "${READY_JSON}"
 
 if command -v python3 >/dev/null 2>&1; then
@@ -29,7 +39,7 @@ fi
 
 echo ""
 echo "→ GET ${V1}/meditation/voice-presets"
-curl -sf "${V1}/meditation/voice-presets" | head -c 300
+curl -sf "${V1}/meditation/voice-presets" || _curl_fail | head -c 300
 echo ""
 echo ""
 echo "✓ Smoke checks passed (demo_ready=true). Open the Next UI and try Begin or Words only."

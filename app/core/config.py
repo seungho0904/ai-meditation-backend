@@ -8,6 +8,18 @@ from typing import Literal, Optional
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Always merged into CORS so a narrow `.env` value cannot block 127.0.0.1 dev.
+_DEV_CORS_ORIGINS: tuple[str, ...] = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+    "http://localhost:3003",
+    "http://127.0.0.1:3003",
+)
+
 
 class Settings(BaseSettings):
     """
@@ -43,9 +55,29 @@ class Settings(BaseSettings):
             return ",".join(v)
         return v
 
+    @field_validator(
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "ELEVENLABS_API_KEY",
+        mode="before",
+    )
+    @classmethod
+    def blank_secret_to_none(cls, v: object) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
+
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        from_env = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        merged: list[str] = []
+        seen: set[str] = set()
+        for origin in (*from_env, *_DEV_CORS_ORIGINS):
+            if origin not in seen:
+                seen.add(origin)
+                merged.append(origin)
+        return merged
 
     # Default script/UI language when clients omit `locale` on meditation POST bodies.
     APP_LOCALE: Literal["en", "ko"] = "en"

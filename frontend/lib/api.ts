@@ -1,9 +1,17 @@
-const base =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
+function productionApiBase(): string {
+  return process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ?? "http://127.0.0.1:8000";
+}
 
+/**
+ * In the browser during `next dev`, use a same-origin proxy (`/api-proxy` → :8000)
+ * so localhost:3000 does not hit CORS talking to 127.0.0.1:8000.
+ */
 export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${p}`;
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    return `/api-proxy${p}`;
+  }
+  return `${productionApiBase()}${p}`;
 }
 
 /** FastAPI `detail` may be a string, validation array, or nested object. */

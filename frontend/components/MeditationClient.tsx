@@ -55,11 +55,14 @@ export default function MeditationClient() {
   }, [script, locale]);
 
   const refreshApiStatus = useCallback(() => {
-    void fetchDemoReadiness().then((r) => {
-      if (!r.online) setConnectivity("offline");
-      else if (!r.demoReady) setConnectivity("misconfigured");
-      else setConnectivity("ready");
-    });
+    setConnectivity((prev) => (prev === "ready" ? "ready" : "checking"));
+    void fetchDemoReadiness()
+      .then((r) => {
+        if (!r.online) setConnectivity("offline");
+        else if (!r.demoReady) setConnectivity("misconfigured");
+        else setConnectivity("ready");
+      })
+      .catch(() => setConnectivity("offline"));
   }, []);
 
   const greeting = useMemo(() => {
@@ -322,7 +325,7 @@ export default function MeditationClient() {
   const sphereBreathing =
     view === "compose" ? busy : !!(audioActive || busy);
 
-  const apiBlocked = connectivity !== "ready";
+  const apiBlocked = connectivity === "offline" || connectivity === "misconfigured";
 
   return (
     <div className="flex flex-1 flex-col">

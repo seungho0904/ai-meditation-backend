@@ -22,7 +22,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 npm run setup               # copies .env + frontend/.env.local only if missing
 # Edit `.env`: API keys, LLM_PROVIDER, APP_LOCALE (en | ko), CORS_ORIGINS, etc.
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --reload-dir app --host 127.0.0.1 --port 8000
 ```
 
 ### Verify the API (smoke test)
@@ -92,7 +92,7 @@ Load settings via **`pydantic-settings`** in `app/core/config.py` from the envir
 | Area | Purpose |
 |------|---------|
 | `PROJECT_NAME`, `API_V1_STR`, `DEBUG` | App metadata and `/api/v1` prefix |
-| `CORS_ORIGINS` | Comma-separated browser origins (include every Next dev origin you use) |
+| `CORS_ORIGINS` | Comma-separated browser origins; **127.0.0.1:3000–3003** are always merged in code so a short `.env` value does not block the UI |
 | `APP_LOCALE` | Default script language when `locale` is omitted on meditation POST bodies: `en` \| `ko` |
 | `LLM_PROVIDER`, `OPENAI_*`, `ANTHROPIC_*`, `LLM_TIMEOUT_SECONDS` | LLM provider and timeouts |
 | `ELEVENLABS_*`, `TTS_*` | Voice, model, format, TTS limits |
